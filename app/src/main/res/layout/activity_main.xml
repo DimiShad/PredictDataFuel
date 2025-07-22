@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- ΤΙΤΛΟΣ -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📱 ΣΥΛΛΟΓΗ ΔΕΔΟΜΕΝΩΝ ΑΙΣΘΗΤΗΡΩΝ"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:padding="16dp"
+            android:background="#E3F2FD"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ΚΑΤΑΣΤΑΣΗ -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔴 Αναμονή..."
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:padding="8dp"
+            android:background="#FFECEC"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ΚΟΥΜΠΙ ΣΥΛΛΟΓΗΣ -->
+        <Button
+            android:id="@+id/btnStartStop"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:text="▶️ ΕΝΑΡΞΗ ΣΥΛΛΟΓΗΣ"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="24dp" />
+
+        <!-- ΜΕΤΡΗΤΕΣ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#F5F5F5"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📊 ΜΕΤΡΗΤΕΣ"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvDataCount"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📦 Δεδομένα: 0"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvTime"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⏱️ Χρόνος: 00:00"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <!-- GPS ΔΕΔΟΜΕΝΑ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#E8F5E8"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🛰️ GPS ΔΕΔΟΜΕΝΑ"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvSpeed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏃 Ταχύτητα: 0.0 km/h"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvLocation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📍 Θέση: 0.000000, 0.000000"
+                android:textSize="12sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvAltitude"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🏔️ Υψόμετρο: 0.0 m"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <!-- ΑΙΣΘΗΤΗΡΕΣ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFF3E0"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📱 ΑΙΣΘΗΤΗΡΕΣ"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvAccelerometer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📈 Επιταχυνσιόμετρο: 0.0, 0.0, 0.0"
+                android:textSize="12sp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvGyroscope"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌀 Γυροσκόπιο: 0.0, 0.0, 0.0"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

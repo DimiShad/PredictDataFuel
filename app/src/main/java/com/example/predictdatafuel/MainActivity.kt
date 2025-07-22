@@ -46,6 +46,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private lateinit var tvAccelerometer: TextView
     private lateinit var tvGyroscope: TextView
     private lateinit var btnStartStop: Button
+    private lateinit var btnExportCSV: Button
+    private lateinit var btnLoadCSV: Button
+    private lateinit var btnClearData: Button
+    private lateinit var tvFileStatus: TextView
 
     // ΑΙΣΘΗΤΗΡΕΣ
     private lateinit var sensorManager: SensorManager
@@ -74,14 +78,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private val handler = Handler(Looper.getMainLooper())
     private var timeRunnable: Runnable? = null
 
+    // CSV MANAGER
+    private lateinit var csvManager: CSVManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         initViews()
         initSensors()
+        initCSVManager()
         setupUI()
         requestPermissions()
+        updateFileStatus()
     }
 
     private fun initViews() {
@@ -94,6 +103,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         tvAccelerometer = findViewById(R.id.tvAccelerometer)
         tvGyroscope = findViewById(R.id.tvGyroscope)
         btnStartStop = findViewById(R.id.btnStartStop)
+        btnExportCSV = findViewById(R.id.btnExportCSV)
+        btnLoadCSV = findViewById(R.id.btnLoadCSV)
+        btnClearData = findViewById(R.id.btnClearData)
+        tvFileStatus = findViewById(R.id.tvFileStatus)
     }
 
     private fun initSensors() {
@@ -112,6 +125,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
+    private fun initCSVManager() {
+        csvManager = CSVManager(this)
+    }
+
     private fun setupUI() {
         btnStartStop.setOnClickListener {
             if (!isCollecting) {
@@ -120,12 +137,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                 stopCollection()
             }
         }
+
+        btnExportCSV.setOnClickListener {
+            exportData()
+        }
+
+        btnLoadCSV.setOnClickListener {
+            loadData()
+        }
+
+        btnClearData.setOnClickListener {
+            clearAllData()
+        }
     }
 
     private fun requestPermissions() {
         val permissions = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE
         )
 
         val needPermissions = permissions.filter {
@@ -283,5 +314,64 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         if (isCollecting) {
             stopCollection()
         }
+    }
+
+    // CSV ΛΕΙΤΟΥΡΓΙΕΣ
+    private fun exportData() {
+        if (dataList.isEmpty()) {
+            tvFileStatus.text = "❌ Δεν υπάρχουν δεδομένα για εξαγωγή!"
+            return
+        }
+
+        if (!checkStoragePermissions()) {
+            tvFileStatus.text = "❌ Χρειάζονται άδειες αποθήκευσης!"
+            return
+        }
+
+        val result = csvManager.exportToCSV(dataList)
+        tvFileStatus.text = result
+        updateFileStatus()
+    }
+
+    private fun loadData() {
+        if (!checkStoragePermissions()) {
+            tvFileStatus.text = "❌ Χρειάζονται άδειες αποθήκευσης!"
+            return
+        }
+
+        val (loadedData, message) = csvManager.loadFromCSV()
+        tvFileStatus.text = message
+
+        if (loadedData.isNotEmpty()) {
+            dataList.clear()
+            dataList.addAll(loadedData)
+            updateUI()
+            tvStatus.text = "✅ Φορτώθηκαν ${loadedData.size} δεδομένα!"
+        }
+
+        updateFileStatus()
+    }
+
+    private fun clearAllData() {
+        dataList.clear()
+        val deleteResult = csvManager.deleteAllCSVs()
+        updateUI()
+        tvFileStatus.text = deleteResult
+        tvStatus.text = "🗑️ Όλα τα δεδομένα καθαρίστηκαν!"
+        updateFileStatus()
+    }
+
+    private fun updateFileStatus() {
+        val csvFiles = csvManager.getCSVFiles()
+        if (csvFiles.isEmpty()) {
+            tvFileStatus.text = "📁 Αρχεία: Δεν υπάρχουν"
+        } else {
+            val latestFile = csvFiles.maxByOrNull { it.lastModified() }
+            tvFileStatus.text = "📁 Τελευταίο: ${latestFile?.name ?: "Άγνωστο"}"
+        }
+    }
+
+    private fun checkStoragePermissions(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }
 }

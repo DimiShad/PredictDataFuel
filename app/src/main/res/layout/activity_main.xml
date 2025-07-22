@@ -123,7 +123,8 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:background="#FFF3E0"
-            android:padding="16dp">
+            android:padding="16dp"
+            android:layout_marginBottom="16dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -146,6 +147,63 @@
                 android:layout_height="wrap_content"
                 android:text="🌀 Γυροσκόπιο: 0.0, 0.0, 0.0"
                 android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <!-- ΚΟΥΜΠΙΑ ΑΡΧΕΙΩΝ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#F3E5F5"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="💾 ΔΙΑΧΕΙΡΙΣΗ ΑΡΧΕΙΩΝ"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnExportCSV"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📤 ΕΞΑΓΩΓΗ CSV"
+                    android:layout_marginEnd="4dp" />
+
+                <Button
+                    android:id="@+id/btnLoadCSV"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📥 ΦΟΡΤΩΣΗ CSV"
+                    android:layout_marginStart="4dp" />
+
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnClearData"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🗑️ ΚΑΘΑΡΙΣΜΟΣ ΔΕΔΟΜΕΝΩΝ"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvFileStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📁 Αρχείο: Δεν υπάρχει"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:background="#FFFFFF" />
 
         </LinearLayout>
 

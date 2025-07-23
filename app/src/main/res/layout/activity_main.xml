@@ -207,5 +207,115 @@
 
         </LinearLayout>
 
+        <!-- MACHINE LEARNING -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#E8F0FE"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🤖 MACHINE LEARNING"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnTrainModel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🎓 ΕΚΠΑΙΔΕΥΣΗ"
+                    android:layout_marginEnd="4dp" />
+
+                <Button
+                    android:id="@+id/btnModelInfo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📊 ΣΤΑΤΙΣΤΙΚΑ"
+                    android:layout_marginStart="4dp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnLoadRealData"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📚 ΦΟΡΤΩΣΗ DATASET"
+                    android:layout_marginEnd="4dp" />
+
+                <Button
+                    android:id="@+id/btnAnalyzeData"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🔍 ΑΝΑΛΥΣΗ"
+                    android:layout_marginStart="4dp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnCalculateConsumption"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="⛽ ΚΑΤΑΝΑΛΩΣΗ"
+                    android:layout_marginEnd="4dp" />
+
+                <Button
+                    android:id="@+id/btnResetModel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🔄 RESET"
+                    android:layout_marginStart="4dp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvCurrentPrediction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🔮 Πρόβλεψη: -- L/100km"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#1976D2"
+                android:padding="8dp"
+                android:background="#FFFFFF"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvModelStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="❌ Μοντέλο δεν έχει εκπαιδευτεί"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:background="#FFEBEE" />
+
+        </LinearLayout>
+
     </LinearLayout>
 </ScrollView>

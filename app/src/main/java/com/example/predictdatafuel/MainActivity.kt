@@ -18,8 +18,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import kotlin.math.*
 
-// ΔΟΜΗ ΔΕΔΟΜΕΝΩΝ
 data class SensorDataPoint(
     val timestamp: Long,
     val accelerometerX: Float,
@@ -50,6 +50,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private lateinit var btnLoadCSV: Button
     private lateinit var btnClearData: Button
     private lateinit var tvFileStatus: TextView
+    private lateinit var btnTrainModel: Button
+    private lateinit var btnModelInfo: Button
+    private lateinit var tvCurrentPrediction: TextView
+    private lateinit var tvModelStatus: TextView
+    private lateinit var btnLoadRealData: Button
+    private lateinit var btnAnalyzeData: Button
+    private lateinit var btnCalculateConsumption: Button
+    private lateinit var btnResetModel: Button
 
     // ΑΙΣΘΗΤΗΡΕΣ
     private lateinit var sensorManager: SensorManager
@@ -81,6 +89,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     // CSV MANAGER
     private lateinit var csvManager: CSVManager
 
+    // ML MODEL
+    private lateinit var mlModel: FuelPredictionModel
+
+    // REAL DATA LOADER
+    private lateinit var realDataLoader: RealDataLoader
+    private var realTrainingData = listOf<FuelPredictionModel.TrainingDataPoint>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -88,9 +103,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         initViews()
         initSensors()
         initCSVManager()
+        initMLModel()
         setupUI()
         requestPermissions()
         updateFileStatus()
+        updateModelStatus()
     }
 
     private fun initViews() {
@@ -107,6 +124,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         btnLoadCSV = findViewById(R.id.btnLoadCSV)
         btnClearData = findViewById(R.id.btnClearData)
         tvFileStatus = findViewById(R.id.tvFileStatus)
+        btnTrainModel = findViewById(R.id.btnTrainModel)
+        btnModelInfo = findViewById(R.id.btnModelInfo)
+        tvCurrentPrediction = findViewById(R.id.tvCurrentPrediction)
+        tvModelStatus = findViewById(R.id.tvModelStatus)
+        btnLoadRealData = findViewById(R.id.btnLoadRealData)
+        btnAnalyzeData = findViewById(R.id.btnAnalyzeData)
+        btnCalculateConsumption = findViewById(R.id.btnCalculateConsumption)
+        btnResetModel = findViewById(R.id.btnResetModel)
     }
 
     private fun initSensors() {
@@ -116,7 +141,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
-        // ΕΛΕΓΧΟΣ ΑΝ ΥΠΑΡΧΟΥΝ ΑΙΣΘΗΤΗΡΕΣ
         if (accelerometer == null) {
             tvStatus.text = "❌ Δεν βρέθηκε επιταχυνσιόμετρο!"
         }
@@ -127,6 +151,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     private fun initCSVManager() {
         csvManager = CSVManager(this)
+    }
+
+    private fun initMLModel() {
+        mlModel = FuelPredictionModel(this)
+        realDataLoader = RealDataLoader(this)
     }
 
     private fun setupUI() {
@@ -148,6 +177,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
         btnClearData.setOnClickListener {
             clearAllData()
+        }
+
+        btnTrainModel.setOnClickListener {
+            trainMLModel()
+        }
+
+        btnModelInfo.setOnClickListener {
+            showModelInfo()
+        }
+
+        btnLoadRealData.setOnClickListener {
+            loadRealDataset()
+        }
+
+        btnAnalyzeData.setOnClickListener {
+            analyzeRealData()
+        }
+
+        btnCalculateConsumption.setOnClickListener {
+            calculateRealConsumption()
+        }
+
+        btnResetModel.setOnClickListener {
+            resetMLModel()
         }
     }
 
@@ -177,12 +230,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         isCollecting = true
         startTime = System.currentTimeMillis()
 
-        // UI ΑΛΛΑΓΕΣ
         btnStartStop.text = "⏹️ ΔΙΑΚΟΠΗ ΣΥΛΛΟΓΗΣ"
         tvStatus.text = "🟢 Συλλέγονται δεδομένα..."
         tvStatus.setBackgroundColor(0xFF7BFF7B.toInt())
 
-        // ΕΝΑΡΞΗ ΑΙΣΘΗΤΗΡΩΝ
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
@@ -190,7 +241,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
 
-        // ΕΝΑΡΞΗ GPS
         try {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 0.5f, this)
@@ -199,7 +249,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvStatus.text = "❌ Σφάλμα GPS: ${e.message}"
         }
 
-        // ΕΝΑΡΞΗ TIMER & ΣΥΛΛΟΓΗΣ
         startTimer()
         startPeriodicCollection()
     }
@@ -207,16 +256,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private fun stopCollection() {
         isCollecting = false
 
-        // UI ΑΛΛΑΓΕΣ
         btnStartStop.text = "▶️ ΕΝΑΡΞΗ ΣΥΛΛΟΓΗΣ"
         tvStatus.text = "🔴 Αναμονή..."
         tvStatus.setBackgroundColor(0xFFFFECEC.toInt())
 
-        // ΔΙΑΚΟΠΗ ΑΙΣΘΗΤΗΡΩΝ
         sensorManager.unregisterListener(this)
         locationManager.removeUpdates(this)
 
-        // ΔΙΑΚΟΠΗ TIMER
         timeRunnable?.let { handler.removeCallbacks(it) }
 
         tvStatus.text = "✅ Συλλέχθηκαν ${dataList.size} δεδομένα!"
@@ -243,7 +289,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                 if (isCollecting) {
                     collectDataPoint()
                     updateUI()
-                    handler.postDelayed(this, 200) // ΚΑΘΕ 200ms = 5 ΦΟΡΕΣ ΤΟ ΔΕΥΤΕΡΟΛΕΠΤΟ
+                    handler.postDelayed(this, 200)
                 }
             }
         }
@@ -266,6 +312,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         )
 
         dataList.add(dataPoint)
+
+        val prediction = mlModel.predict(dataPoint)
+
+        runOnUiThread {
+            tvCurrentPrediction.text = "🔮 Πρόβλεψη: ${String.format("%.1f", prediction)} L/100km"
+
+            val color = when {
+                prediction < 5f -> 0xFF4CAF50.toInt()
+                prediction < 8f -> 0xFFFF9800.toInt()
+                prediction < 12f -> 0xFFFF5722.toInt()
+                else -> 0xFF9C27B0.toInt()
+            }
+            tvCurrentPrediction.setTextColor(color)
+        }
     }
 
     private fun updateUI() {
@@ -277,7 +337,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         tvGyroscope.text = "🌀 Γυροσκόπιο: %.2f, %.2f, %.2f".format(gyroX, gyroY, gyroZ)
     }
 
-    // ΑΙΣΘΗΤΗΡΕΣ CALLBACK
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             when (it.sensor.type) {
@@ -297,11 +356,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    // GPS CALLBACK
     override fun onLocationChanged(location: Location) {
         currentLat = location.latitude
         currentLon = location.longitude
-        currentSpeed = location.speed * 3.6f // m/s -> km/h
+        currentSpeed = location.speed * 3.6f
         currentAltitude = location.altitude
     }
 
@@ -316,7 +374,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
-    // CSV ΛΕΙΤΟΥΡΓΙΕΣ
     private fun exportData() {
         if (dataList.isEmpty()) {
             tvFileStatus.text = "❌ Δεν υπάρχουν δεδομένα για εξαγωγή!"
@@ -373,5 +430,100 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     private fun checkStoragePermissions(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun trainMLModel() {
+        if (dataList.isEmpty()) {
+            tvModelStatus.text = "❌ Δεν υπάρχουν δεδομένα για εκπαίδευση!"
+            return
+        }
+
+        tvModelStatus.text = "🔄 Εκπαίδευση σε εξέλιξη..."
+
+        Thread {
+            val result = mlModel.trainModel(dataList)
+
+            runOnUiThread {
+                tvModelStatus.text = "✅ Μοντέλο εκπαιδευμένο!"
+                tvStatus.text = result
+                updateModelStatus()
+            }
+        }.start()
+    }
+
+    private fun showModelInfo() {
+        val info = mlModel.getModelInfo()
+        tvStatus.text = info
+        updateModelStatus()
+    }
+
+    private fun updateModelStatus() {
+        val info = mlModel.getModelInfo()
+        tvModelStatus.text = if (info.startsWith("✅")) {
+            "✅ Μοντέλο έτοιμο"
+        } else {
+            "❌ Μοντέλο δεν έχει εκπαιδευτεί"
+        }
+    }
+
+    private fun loadRealDataset() {
+        tvModelStatus.text = "🔄 Φόρτωση πραγματικών δεδομένων..."
+
+        Thread {
+            val (data, message) = realDataLoader.loadRealTrainingData()
+            realTrainingData = data
+
+            runOnUiThread {
+                tvStatus.text = message
+                tvModelStatus.text = if (data.isNotEmpty()) {
+                    "✅ Φορτώθηκαν ${data.size} πραγματικά δεδομένα!"
+                } else {
+                    "❌ Αποτυχία φόρτωσης"
+                }
+            }
+        }.start()
+    }
+
+    private fun analyzeRealData() {
+        if (realTrainingData.isEmpty()) {
+            tvStatus.text = "❌ Φόρτωσε πρώτα τα πραγματικά δεδομένα!"
+            return
+        }
+
+        val analysis = realDataLoader.analyzeData(realTrainingData)
+        tvStatus.text = analysis
+    }
+
+    private fun calculateRealConsumption() {
+        if (realTrainingData.isEmpty()) {
+            tvStatus.text = "❌ Φόρτωσε πρώτα τα πραγματικά δεδομένα!"
+            return
+        }
+
+        tvModelStatus.text = "🔄 Υπολογισμός κατανάλωσης..."
+
+        Thread {
+            val (consumptionData, analysisReport) = realDataLoader.calculateFuelConsumption(realTrainingData)
+
+            runOnUiThread {
+                if (consumptionData.isNotEmpty()) {
+                    tvStatus.text = analysisReport
+                    tvModelStatus.text = "✅ Υπολογίστηκε κατανάλωση για ${consumptionData.size} σημεία"
+                } else {
+                    tvStatus.text = analysisReport
+                    tvModelStatus.text = "❌ Αδυναμία υπολογισμού"
+                }
+            }
+        }.start()
+    }
+
+    private fun resetMLModel() {
+        mlModel.resetModel()
+        realTrainingData = emptyList()
+        tvModelStatus.text = "🔄 Μοντέλο επαναφέρθηκε"
+        tvCurrentPrediction.text = "🔮 Πρόβλεψη: -- L/100km"
+        tvCurrentPrediction.setTextColor(0xFF666666.toInt())
+        tvStatus.text = "🔄 Μοντέλο καθαρίστηκε. Ξεκινήστε από την αρχή."
+        updateModelStatus()
     }
 }

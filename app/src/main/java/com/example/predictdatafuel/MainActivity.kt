@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private lateinit var locationManager: LocationManager
     private var accelerometer: Sensor? = null
     private var gyroscope: Sensor? = null
+    private var magnetometer: Sensor? = null
 
     // ΔΕΔΟΜΕΝΑ
     private var isCollecting = false
@@ -82,17 +83,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var currentSpeed = 0f
     private var currentAltitude = 0.0
 
+    // GPS DIAGNOSTICS
+    private var gpsFixTime = 0L
+    private var gpsLocationCount = 0
+    private var lastLocationTime = 0L
+    private var gpsAccuracy = 0f
+
+    // ORIENTATION CALCULATION
+    private val rotationMatrix = FloatArray(9)
+    private val orientationAngles = FloatArray(3)
+    private val accelerometerReading = FloatArray(3)
+    private val magnetometerReading = FloatArray(3)
+    private var currentAzimuth = 0f
+
     // TIMER
     private val handler = Handler(Looper.getMainLooper())
     private var timeRunnable: Runnable? = null
 
-    // CSV MANAGER
+    // CSV MANAGER, ML MODEL, REAL DATA LOADER
     private lateinit var csvManager: CSVManager
-
-    // ML MODEL
     private lateinit var mlModel: FuelPredictionModel
-
-    // REAL DATA LOADER
     private lateinit var realDataLoader: RealDataLoader
     private var realTrainingData = listOf<FuelPredictionModel.TrainingDataPoint>()
 
@@ -108,6 +118,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         requestPermissions()
         updateFileStatus()
         updateModelStatus()
+
+        // GPS DIAGNOSTICS
+        showGPSStatus()
     }
 
     private fun initViews() {
@@ -140,13 +153,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
-
-        if (accelerometer == null) {
-            tvStatus.text = "❌ Δεν βρέθηκε επιταχυνσιόμετρο!"
-        }
-        if (gyroscope == null) {
-            tvGyroscope.text = "🌀 Γυροσκόπιο: Μη διαθέσιμο"
-        }
+        magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
     }
 
     private fun initCSVManager() {
@@ -158,6 +165,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         realDataLoader = RealDataLoader(this)
     }
 
+    private fun showGPSStatus() {
+        val gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        val hasPermissions = checkPermissions()
+
+        val status = """
+            📍 GPS ΔΙΑΓΝΩΣΤΙΚΑ:
+            • GPS Provider: ${if (gpsEnabled) "✅ Ενεργό" else "❌ Απενεργοποιημένο"}
+            • Network Provider: ${if (networkEnabled) "✅ Ενεργό" else "❌ Απενεργοποιημένο"}
+            • Άδειες: ${if (hasPermissions) "✅ Εντάξει" else "❌ Απαιτούνται"}
+            
+            💡 Για να λειτουργήσει η ταχύτητα:
+            1. Βγες ΕΞΩΤΕΡΙΚΑ (όχι σε κτίριο)
+            2. Περίμενε 1-2 λεπτά για GPS lock
+            3. Κινήσου με >5 km/h
+        """.trimIndent()
+
+        tvStatus.text = status
+    }
+
     private fun setupUI() {
         btnStartStop.setOnClickListener {
             if (!isCollecting) {
@@ -167,41 +194,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             }
         }
 
-        btnExportCSV.setOnClickListener {
-            exportData()
-        }
-
-        btnLoadCSV.setOnClickListener {
-            loadData()
-        }
-
-        btnClearData.setOnClickListener {
-            clearAllData()
-        }
-
-        btnTrainModel.setOnClickListener {
-            trainMLModel()
-        }
-
-        btnModelInfo.setOnClickListener {
-            showModelInfo()
-        }
-
-        btnLoadRealData.setOnClickListener {
-            loadRealDataset()
-        }
-
-        btnAnalyzeData.setOnClickListener {
-            analyzeRealData()
-        }
-
-        btnCalculateConsumption.setOnClickListener {
-            calculateRealConsumption()
-        }
-
-        btnResetModel.setOnClickListener {
-            resetMLModel()
-        }
+        btnExportCSV.setOnClickListener { exportData() }
+        btnLoadCSV.setOnClickListener { loadData() }
+        btnClearData.setOnClickListener { clearAllData() }
+        btnTrainModel.setOnClickListener { trainMLModel() }
+        btnModelInfo.setOnClickListener { showModelInfo() }
+        btnLoadRealData.setOnClickListener { loadRealDataset() }
+        btnAnalyzeData.setOnClickListener { analyzeRealData() }
+        btnCalculateConsumption.setOnClickListener { calculateRealConsumption() }
+        btnResetModel.setOnClickListener { resetMLModel() }
     }
 
     private fun requestPermissions() {
@@ -221,32 +222,106 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) {
+            showGPSStatus() // Ενημέρωση status μετά τις άδειες
+        }
+    }
+
     private fun startCollection() {
         if (!checkPermissions()) {
-            tvStatus.text = "❌ Χρειάζονται άδειες!"
+            tvStatus.text = """
+                ❌ ΑΠΑΙΤΟΥΝΤΑΙ ΑΔΕΙΕΣ GPS!
+                
+                Πήγαινε στις Ρυθμίσεις → Εφαρμογές → PredictDataFuel → Άδειες
+                και ενεργοποίησε τη Θέση.
+            """.trimIndent()
+            return
+        }
+
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            tvStatus.text = """
+                ❌ GPS ΑΠΕΝΕΡΓΟΠΟΙΗΜΕΝΟ!
+                
+                Πήγαινε στις Ρυθμίσεις → Θέση και ενεργοποίησε το GPS.
+                Επίσης βγες εξωτερικά για καλύτερο σήμα.
+            """.trimIndent()
             return
         }
 
         isCollecting = true
         startTime = System.currentTimeMillis()
+        gpsFixTime = 0L
+        gpsLocationCount = 0
 
         btnStartStop.text = "⏹️ ΔΙΑΚΟΠΗ ΣΥΛΛΟΓΗΣ"
-        tvStatus.text = "🟢 Συλλέγονται δεδομένα..."
-        tvStatus.setBackgroundColor(0xFF7BFF7B.toInt())
+        tvStatus.text = """
+            🟡 ΕΝΑΡΞΗ ΣΥΛΛΟΓΗΣ...
+            
+            📍 Αναζήτηση GPS σήματος...
+            ⏳ Βγες εξωτερικά και περίμενε 1-2 λεπτά
+            🚗 Κινήσου για να δεις την ταχύτητα
+        """.trimIndent()
+        tvStatus.setBackgroundColor(0xFFFFEB3B.toInt())
 
+        // ΕΝΑΡΞΗ ΑΙΣΘΗΤΗΡΩΝ
         accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
         gyroscope?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+        magnetometer?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
 
+        // ΕΝΑΡΞΗ GPS ΜΕ ΔΙΑΓΝΩΣΤΙΚΑ
         try {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 500, 0.5f, this)
+
+                // GPS Provider - primary
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.GPS_PROVIDER,
+                        500,  // Κάθε 500ms
+                        0f,   // Κάθε μέτρο
+                        this
+                    )
+                }
+
+                // Network Provider - backup
+                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER,
+                        1000,
+                        0f,
+                        this
+                    )
+                }
+
+                // Τελευταία γνωστή θέση
+                val lastGPS = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                val lastNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+
+                val lastKnown = when {
+                    lastGPS != null && (System.currentTimeMillis() - lastGPS.time) < 60000 -> lastGPS
+                    lastNetwork != null && (System.currentTimeMillis() - lastNetwork.time) < 60000 -> lastNetwork
+                    lastGPS != null -> lastGPS
+                    lastNetwork != null -> lastNetwork
+                    else -> null
+                }
+
+                lastKnown?.let {
+                    currentLat = it.latitude
+                    currentLon = it.longitude
+                    currentSpeed = it.speed * 3.6f
+                    currentAltitude = it.altitude
+                    tvStatus.text = "🟡 Χρησιμοποιείται παλιά θέση GPS. Περιμένετε για νέο σήμα..."
+                }
             }
         } catch (e: SecurityException) {
-            tvStatus.text = "❌ Σφάλμα GPS: ${e.message}"
+            tvStatus.text = "❌ Σφάλμα άδειας GPS: ${e.message}"
         }
 
         startTimer()
@@ -257,15 +332,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         isCollecting = false
 
         btnStartStop.text = "▶️ ΕΝΑΡΞΗ ΣΥΛΛΟΓΗΣ"
-        tvStatus.text = "🔴 Αναμονή..."
-        tvStatus.setBackgroundColor(0xFFFFECEC.toInt())
+        tvStatus.text = """
+            ✅ ΣΥΛΛΟΓΗ ΤΕΛΕΙΩΣΕ!
+            
+            📦 Συλλέχθηκαν: ${dataList.size} δεδομένα
+            📍 GPS updates: $gpsLocationCount
+            ${if (gpsLocationCount == 0) "⚠️ Κανένα GPS update - δοκίμασε εξωτερικά!" else ""}
+        """.trimIndent()
+        tvStatus.setBackgroundColor(0xFFE8F5E8.toInt())
 
         sensorManager.unregisterListener(this)
         locationManager.removeUpdates(this)
-
         timeRunnable?.let { handler.removeCallbacks(it) }
-
-        tvStatus.text = "✅ Συλλέχθηκαν ${dataList.size} δεδομένα!"
     }
 
     private fun startTimer() {
@@ -275,7 +353,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                     val elapsed = (System.currentTimeMillis() - startTime) / 1000
                     val minutes = elapsed / 60
                     val seconds = elapsed % 60
-                    tvTime.text = "⏱️ Χρόνος: %02d:%02d".format(minutes, seconds)
+                    tvTime.text = "⏱️ Χρόνος: %02d:%02d | GPS: $gpsLocationCount updates".format(minutes, seconds)
                     handler.postDelayed(this, 1000)
                 }
             }
@@ -330,11 +408,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     private fun updateUI() {
         tvDataCount.text = "📦 Δεδομένα: ${dataList.size}"
-        tvSpeed.text = "🏃 Ταχύτητα: %.1f km/h".format(currentSpeed)
-        tvLocation.text = "📍 Θέση: %.6f, %.6f".format(currentLat, currentLon)
-        tvAltitude.text = "🏔️ Υψόμετρο: %.1f m".format(currentAltitude)
-        tvAccelerometer.text = "📈 Επιταχυνσιόμετρο: %.2f, %.2f, %.2f".format(accelX, accelY, accelZ)
-        tvGyroscope.text = "🌀 Γυροσκόπιο: %.2f, %.2f, %.2f".format(gyroX, gyroY, gyroZ)
+
+        // ΠΡΟΣΘΗΚΗ GPS STATUS ΣΤΗ ΤΑΧΥΤΗΤΑ
+        val speedText = if (gpsLocationCount == 0) {
+            "🏃 Ταχύτητα: ${String.format("%.1f", currentSpeed)} km/h ⚠️ ΧΩΡ2Σ GPS"
+        } else {
+            "🏃 Ταχύτητα: ${String.format("%.1f", currentSpeed)} km/h ✅"
+        }
+        tvSpeed.text = speedText
+
+        tvLocation.text = "📍 Θέση: ${String.format("%.6f", currentLat)}, ${String.format("%.6f", currentLon)}"
+        tvAltitude.text = "🏔️ Υψόμετρο: ${String.format("%.1f", currentAltitude)} m"
+        tvAccelerometer.text = "📈 Επιταχυνσιόμετρο: ${String.format("%.2f, %.2f, %.2f", accelX, accelY, accelZ)}"
+
+        val compassDirection = when {
+            currentAzimuth < 22.5 || currentAzimuth >= 337.5 -> "Β (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 67.5 -> "ΒΑ (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 112.5 -> "Α (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 157.5 -> "ΝΑ (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 202.5 -> "Ν (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 247.5 -> "ΝΔ (${String.format("%.0f", currentAzimuth)}°)"
+            currentAzimuth < 292.5 -> "Δ (${String.format("%.0f", currentAzimuth)}°)"
+            else -> "ΒΔ (${String.format("%.0f", currentAzimuth)}°)"
+        }
+        tvGyroscope.text = "🧭 Κατεύθυνση: $compassDirection"
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -344,27 +441,68 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                     accelX = it.values[0]
                     accelY = it.values[1]
                     accelZ = it.values[2]
+                    System.arraycopy(it.values, 0, accelerometerReading, 0, accelerometerReading.size)
+                    updateOrientationAngles()
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     gyroX = it.values[0]
                     gyroY = it.values[1]
                     gyroZ = it.values[2]
                 }
+                Sensor.TYPE_MAGNETIC_FIELD -> {
+                    System.arraycopy(it.values, 0, magnetometerReading, 0, magnetometerReading.size)
+                    updateOrientationAngles()
+                }
             }
+        }
+    }
+
+    private fun updateOrientationAngles() {
+        SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)
+        SensorManager.getOrientation(rotationMatrix, orientationAngles)
+        currentAzimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+        if (currentAzimuth < 0) {
+            currentAzimuth += 360f
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onLocationChanged(location: Location) {
+        gpsLocationCount++
+        lastLocationTime = System.currentTimeMillis()
+        gpsAccuracy = location.accuracy
+
+        if (gpsFixTime == 0L) {
+            gpsFixTime = System.currentTimeMillis()
+        }
+
         currentLat = location.latitude
         currentLon = location.longitude
-        currentSpeed = location.speed * 3.6f
+        currentSpeed = location.speed * 3.6f // m/s to km/h
         currentAltitude = location.altitude
+
+        // GPS STATUS UPDATE
+        if (isCollecting) {
+            val timeSinceStart = (System.currentTimeMillis() - startTime) / 1000
+            tvStatus.text = """
+                🟢 GPS ΣΗΜΑ ΕΝΕΡΓΟ! 
+                
+                📍 Updates: $gpsLocationCount
+                ⏰ GPS fix σε: ${(gpsFixTime - startTime) / 1000}s
+                🎯 Ακρίβεια: ${String.format("%.1f", gpsAccuracy)}m
+                🏃 Ταχύτητα: ${String.format("%.1f", currentSpeed)} km/h
+                
+                ${if (currentSpeed < 1f) "💡 Κινήσου για να δεις αλλαγή ταχύτητας!" else "✅ Η ταχύτητα καταγράφεται!"}
+            """.trimIndent()
+            tvStatus.setBackgroundColor(0xFF7BFF7B.toInt())
+        }
     }
 
     private fun checkPermissions(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val fineLocation = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarseLocation = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return fineLocation && coarseLocation
     }
 
     override fun onDestroy() {
@@ -374,17 +512,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
+    // ΥΠΟΛΟΙΠΕΣ ΜΕΘΟΔΟΙ (CSV, ML) - ΙΔΙΕΣ ΜΕ ΠΡΙΝ
     private fun exportData() {
         if (dataList.isEmpty()) {
             tvFileStatus.text = "❌ Δεν υπάρχουν δεδομένα για εξαγωγή!"
             return
         }
-
         if (!checkStoragePermissions()) {
             tvFileStatus.text = "❌ Χρειάζονται άδειες αποθήκευσης!"
             return
         }
-
         val result = csvManager.exportToCSV(dataList)
         tvFileStatus.text = result
         updateFileStatus()
@@ -395,17 +532,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvFileStatus.text = "❌ Χρειάζονται άδειες αποθήκευσης!"
             return
         }
-
         val (loadedData, message) = csvManager.loadFromCSV()
         tvFileStatus.text = message
-
         if (loadedData.isNotEmpty()) {
             dataList.clear()
             dataList.addAll(loadedData)
             updateUI()
             tvStatus.text = "✅ Φορτώθηκαν ${loadedData.size} δεδομένα!"
         }
-
         updateFileStatus()
     }
 
@@ -437,12 +571,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvModelStatus.text = "❌ Δεν υπάρχουν δεδομένα για εκπαίδευση!"
             return
         }
-
         tvModelStatus.text = "🔄 Εκπαίδευση σε εξέλιξη..."
-
         Thread {
             val result = mlModel.trainModel(dataList)
-
             runOnUiThread {
                 tvModelStatus.text = "✅ Μοντέλο εκπαιδευμένο!"
                 tvStatus.text = result
@@ -468,11 +599,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     private fun loadRealDataset() {
         tvModelStatus.text = "🔄 Φόρτωση πραγματικών δεδομένων..."
-
         Thread {
             val (data, message) = realDataLoader.loadRealTrainingData()
             realTrainingData = data
-
             runOnUiThread {
                 tvStatus.text = message
                 tvModelStatus.text = if (data.isNotEmpty()) {
@@ -489,7 +618,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvStatus.text = "❌ Φόρτωσε πρώτα τα πραγματικά δεδομένα!"
             return
         }
-
         val analysis = realDataLoader.analyzeData(realTrainingData)
         tvStatus.text = analysis
     }
@@ -499,12 +627,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvStatus.text = "❌ Φόρτωσε πρώτα τα πραγματικά δεδομένα!"
             return
         }
-
         tvModelStatus.text = "🔄 Υπολογισμός κατανάλωσης..."
-
         Thread {
             val (consumptionData, analysisReport) = realDataLoader.calculateFuelConsumption(realTrainingData)
-
             runOnUiThread {
                 if (consumptionData.isNotEmpty()) {
                     tvStatus.text = analysisReport

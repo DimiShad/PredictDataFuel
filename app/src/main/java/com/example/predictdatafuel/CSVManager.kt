@@ -10,7 +10,8 @@ import java.util.*
 
 class CSVManager(private val context: Context) {
 
-    private val CSV_HEADER = "timestamp,accelerometer_x,accelerometer_y,accelerometer_z,gyroscope_x,gyroscope_y,gyroscope_z,latitude,longitude,speed,altitude"
+    // ΕΝΗΜΕΡΩΜΕΝΟ HEADER για μαγνητόμετρο αντί για γυροσκόπιο
+    private val CSV_HEADER = "timestamp,accelerometer_x,accelerometer_y,accelerometer_z,magnetometer_x,magnetometer_y,magnetometer_z,compass_heading,latitude,longitude,speed,altitude,speed_accuracy,bearing"
 
     fun exportToCSV(dataList: List<SensorDataPoint>): String {
         return try {
@@ -32,19 +33,22 @@ class CSVManager(private val context: Context) {
             writer.append(CSV_HEADER)
             writer.append("\n")
 
-            // ΔΕΔΟΜΕΝΑ
+            // ΔΕΔΟΜΕΝΑ με νέα δομή SensorDataPoint
             for (data in dataList) {
                 writer.append("${data.timestamp},")
                 writer.append("${data.accelerometerX},")
                 writer.append("${data.accelerometerY},")
                 writer.append("${data.accelerometerZ},")
-                writer.append("${data.gyroscopeX},")
-                writer.append("${data.gyroscopeY},")
-                writer.append("${data.gyroscopeZ},")
+                writer.append("${data.magnetometerX},")        // Μαγνητόμετρο αντί για γυροσκόπιο
+                writer.append("${data.magnetometerY},")
+                writer.append("${data.magnetometerZ},")
+                writer.append("${data.compassHeading},")       // Πυξίδα
                 writer.append("${data.latitude},")
                 writer.append("${data.longitude},")
                 writer.append("${data.speed},")
-                writer.append("${data.altitude}")
+                writer.append("${data.altitude},")
+                writer.append("${data.speedAccuracy},")        // Νέα πεδία
+                writer.append("${data.bearing}")
                 writer.append("\n")
             }
 
@@ -84,20 +88,25 @@ class CSVManager(private val context: Context) {
             // ΠΑΡΑΛΗΨΗ HEADER (γραμμή 0) ΚΑΙ ΔΙΑΒΑΣΜΑ ΔΕΔΟΜΕΝΩΝ
             for (i in 1 until lines.size) {
                 val values = lines[i].split(",")
-                if (values.size >= 11) {
+
+                // Έλεγχος για τον ελάχιστο αριθμό στηλών
+                if (values.size >= 12) { // Τουλάχιστον τα βασικά πεδία
                     try {
                         val dataPoint = SensorDataPoint(
-                            timestamp = values[0].toLong(),
-                            accelerometerX = values[1].toFloat(),
-                            accelerometerY = values[2].toFloat(),
-                            accelerometerZ = values[3].toFloat(),
-                            gyroscopeX = values[4].toFloat(),
-                            gyroscopeY = values[5].toFloat(),
-                            gyroscopeZ = values[6].toFloat(),
-                            latitude = values[7].toDouble(),
-                            longitude = values[8].toDouble(),
-                            speed = values[9].toFloat(),
-                            altitude = values[10].toDouble()
+                            timestamp = values[0].toLongOrNull() ?: System.currentTimeMillis(),
+                            accelerometerX = values[1].toFloatOrNull() ?: 0f,
+                            accelerometerY = values[2].toFloatOrNull() ?: 0f,
+                            accelerometerZ = values[3].toFloatOrNull() ?: 0f,
+                            magnetometerX = values[4].toFloatOrNull() ?: 0f,     // Μαγνητόμετρο
+                            magnetometerY = values[5].toFloatOrNull() ?: 0f,
+                            magnetometerZ = values[6].toFloatOrNull() ?: 0f,
+                            compassHeading = values[7].toFloatOrNull() ?: 0f,    // Πυξίδα
+                            latitude = values[8].toDoubleOrNull() ?: 0.0,
+                            longitude = values[9].toDoubleOrNull() ?: 0.0,
+                            speed = values[10].toFloatOrNull() ?: 0f,
+                            altitude = values[11].toDoubleOrNull() ?: 0.0,
+                            speedAccuracy = if (values.size > 12) values[12].toFloatOrNull() ?: 0f else 0f,
+                            bearing = if (values.size > 13) values[13].toFloatOrNull() ?: 0f else 0f
                         )
                         dataList.add(dataPoint)
                     } catch (e: NumberFormatException) {

@@ -19,43 +19,54 @@
             android:textStyle="bold"
             android:gravity="center"
             android:padding="20dp"
-            android:background="@drawable/card_background"
+            android:background="#FFFFFF"
             android:textColor="#1976D2"
-            android:layout_marginBottom="20dp" />
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp" />
+
+        <!-- PROGRESS BAR -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp" />
 
         <!-- ΚΑΤΑΣΤΑΣΗ ΕΦΑΡΜΟΓΗΣ -->
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🔄 Εκπαίδευση μοντέλου..."
-            android:textSize="16sp"
-            android:textStyle="bold"
+            android:text="🔄 Φόρτωση δεδομένων από API..."
+            android:textSize="14sp"
             android:padding="16dp"
-            android:background="@drawable/status_card"
+            android:background="#FFF3E0"
             android:textColor="#333333"
-            android:layout_marginBottom="20dp" />
+            android:layout_marginBottom="16dp"
+            android:elevation="1dp" />
 
         <!-- ΚΟΥΜΠΙ ΔΙΑΔΡΟΜΗΣ -->
         <Button
             android:id="@+id/btnStartStop"
             android:layout_width="match_parent"
-            android:layout_height="70dp"
+            android:layout_height="60dp"
             android:text="▶️ ΕΝΑΡΞΗ ΔΙΑΔΡΟΜΗΣ"
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
-            android:background="@drawable/start_button"
-            android:layout_marginBottom="24dp" />
+            android:backgroundTint="#1976D2"
+            android:layout_marginBottom="20dp" />
 
         <!-- ΠΡΟΒΛΕΨΗ ΚΑΤΑΝΑΛΩΣΗΣ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@drawable/prediction_card"
-            android:padding="20dp"
-            android:layout_marginBottom="20dp">
+            android:background="#E8F5E8"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -64,30 +75,30 @@
                 android:textStyle="bold"
                 android:textSize="16sp"
                 android:textColor="#2E7D32"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="8dp" />
 
             <TextView
                 android:id="@+id/tvFuelPrediction"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="⛽ Τρέχουσα κατανάλωση: -- L/100km"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="#1976D2"
                 android:gravity="center"
-                android:padding="12dp"
+                android:padding="10dp"
                 android:background="#FFFFFF"
-                android:layout_marginBottom="12dp" />
+                android:layout_marginBottom="8dp" />
 
             <TextView
                 android:id="@+id/tvTripConsumption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📍 Απόσταση: -- km\n⛽ Μέση κατανάλωση: -- L/100km\n🔋 Εκτιμώμενη χρήση: -- L"
-                android:textSize="14sp"
+                android:textSize="12sp"
                 android:textColor="#555555"
                 android:background="#F9F9F9"
-                android:padding="12dp" />
+                android:padding="8dp" />
 
         </LinearLayout>
 
@@ -96,9 +107,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@drawable/data_card"
-            android:padding="16dp"
-            android:layout_marginBottom="16dp">
+            android:background="#FFF8E1"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp"
+            android:elevation="1dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -114,7 +126,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📊 Σημεία δεδομένων: 0"
-                android:textSize="14sp"
+                android:textSize="12sp"
                 android:textColor="#666666"
                 android:layout_marginBottom="4dp" />
 
@@ -123,45 +135,85 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🏃 Ταχύτητα: 0.0 km/h"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="#1976D2"
-                android:layout_marginBottom="6dp" />
+                android:layout_marginBottom="4dp" />
 
             <TextView
                 android:id="@+id/tvLocation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="📍 0.000000, 0.000000\n🧭 Β 0°"
-                android:textSize="12sp"
-                android:textColor="#999999"
-                android:lineSpacingExtra="2dp" />
+                android:textSize="11sp"
+                android:textColor="#888888"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginBottom="4dp" />
 
         </LinearLayout>
 
-        <!-- ΠΛΗΡΟΦΟΡΙΕΣ -->
+        <!-- ΑΙΣΘΗΤΗΡΕΣ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="@drawable/info_card"
-            android:padding="16dp">
+            android:background="#F3E5F5"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp"
+            android:elevation="1dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="ℹ️ ΠΛΗΡΟΦΟΡΙΕΣ"
+                android:text="📱 ΑΙΣΘΗΤΗΡΕΣ"
                 android:textStyle="bold"
                 android:textSize="14sp"
                 android:textColor="#7B1FA2"
                 android:layout_marginBottom="8dp" />
 
             <TextView
+                android:id="@+id/tvAcceleration"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="• Η εφαρμογή εκπαιδεύεται με πραγματικά δεδομένα\n• Οι προβλέψεις βελτιώνονται με την οδήγηση\n• Τα δεδομένα αποστέλλονται αυτόματα στη βάση\n• Για βέλτιστα αποτελέσματα οδηγήστε >5 λεπτά"
-                android:textSize="12sp"
+                android:text="📈 Επιταχυνσιόμετρο: 0.0, 0.0, 0.0"
+                android:textSize="11sp"
                 android:textColor="#666666"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvCompass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🧭 Πυξίδα: 0.0°"
+                android:textSize="11sp"
+                android:textColor="#666666" />
+
+        </LinearLayout>
+
+        <!-- ΣΥΝΔΕΣΗ ΜΕ API -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#E3F2FD"
+            android:padding="14dp"
+            android:elevation="1dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌐 ΣΥΝΔΕΣΗ ΜΕ ΒΑΣΗ ΔΕΔΟΜΕΝΩΝ"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="#1976D2"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Φόρτωση τελευταίων δεδομένων κατά την εκκίνηση\n• Αποστολή αποτελεσμάτων διαδρομής στο τέλος\n• ML πρόβλεψη με βάση το dataset.csv\n• API: http://83.212.80.156:5000/"
+                android:textSize="11sp"
+                android:textColor="#555555"
                 android:lineSpacingExtra="2dp" />
 
         </LinearLayout>

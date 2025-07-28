@@ -1,73 +1,7 @@
-override fun onSensorChanged(event: SensorEvent?) {
-    event?.let {
-        when (it.sensor.type) {
-            Sensor.TYPE_ACCELEROMETER -> {
-                accelX = it.values[0]
-                accelY = it.values[1]
-                accelZ = it.values[2]
-
-                // Αποθήκευση για υπολογισμό προσανατολισμού
-                System.arraycopy(it.values, 0, accelerometerReading, 0, accelerometerReading.size)
-                hasAccelerometerData = true
-
-                // Υπολογισμός πυξίδας μόνο αν έχουμε και τα δύο δεδομένα
-                if (hasMagnetometerData) {
-                    updateCompassHeading()
-                }
-            }
-            Sensor.TYPE_MAGNETIC_FIELD -> {
-                magnetX = it.values[0]
-                magnetY = it.values[1]
-                magnetZ = it.values[2]
-
-                // Αποθήκευση για υπολογισμό προσανατολισμού
-                System.arraycopy(it.values, 0, magnetometerReading, 0, magnetometerReading.size)
-                hasMagnetometerData = true
-
-                // Υπολογισμός πυξίδας μόνο αν έχουμε και τα δύο δεδομένα
-                if (hasAccelerometerData) {
-                    updateCompassHeading()
-                }
-            }
-        }
-    }
-}
-
-/**
- * Υπολογισμός προσανατολισμού πυξίδας (0° = Βορράς)
- */
-private fun updateCompassHeading() {
-    try {
-        // Υπολογισμός rotation matrix από επιταχυνσιόμετρο και μαγνητόμετρο
-        val success = SensorManager.getRotationMatrix(
-            rotationMatrix, null,
-            accelerometerReading, magnetometerReading
-        )
-
-        if (success) {
-            // Υπολογισμός προσανατολισμού
-            SensorManager.getOrientation(rotationMatrix, orientationAngles)
-
-            // Μετατροπή από radians σε degrees
-            var azimuthInDegrees = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
-
-            // Κανονικοποίηση σε 0-360° (0° = Βορράς)
-            azimuthInDegrees = when {
-                azimuthInDegrees < 0 -> azimuthInDegrees + 360f
-                azimuthInDegrees >= 360f -> azimuthInDegrees - 360f
-                else -> azimuthInDegrees
-            }
-
-            // Εξομάλυνση για σταθερότητα
-            compassHeading = smoothCompassReading(azimuthInDegrees)
-        }
-    } catch (e: Exception) {
-        // Χειρισμός σφάλματος στον υπολογισμό πυξίδας
-        // Κρατάμε την προηγούμενη τιμή
-    }
-}package com.example.predictdatafuel
+package com.example.predictdatafuel
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.Sensor
@@ -77,15 +11,25 @@ import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.view.View
 import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.*
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 import kotlin.math.*
 
 data class SensorDataPoint(
@@ -93,34 +37,38 @@ data class SensorDataPoint(
     val accelerometerX: Float,
     val accelerometerY: Float,
     val accelerometerZ: Float,
-    val magnetometerX: Float,         // Μαγνητόμετρο αντί για γυροσκόπιο
+    val magnetometerX: Float,
     val magnetometerY: Float,
     val magnetometerZ: Float,
-    val compassHeading: Float,        // Μοίρες από τον Βορρά (0-360°)
+    val compassHeading: Float,
     val latitude: Double,
     val longitude: Double,
-    val speed: Float,                 // GPS ταχύτητα σε km/h
+    val speed: Float,
     val altitude: Double,
-    val speedAccuracy: Float = 0f,    // Ακρίβεια ταχύτητας
-    val bearing: Float = 0f           // Κατεύθυνση κίνησης από GPS
+    val speedAccuracy: Float = 0f,
+    val bearing: Float = 0f
 )
 
 class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener {
 
     // UI ΣΤΟΙΧΕΙΑ
+    private lateinit var progressBar: ProgressBar
     private lateinit var tvStatus: TextView
     private lateinit var tvDataCount: TextView
     private lateinit var tvSpeed: TextView
     private lateinit var tvLocation: TextView
     private lateinit var tvFuelPrediction: TextView
     private lateinit var tvTripConsumption: TextView
+    private lateinit var tvAcceleration: TextView
+    private lateinit var tvCompass: TextView
     private lateinit var btnStartStop: Button
 
-    // ΑΙΣΘΗΤΗΡΕΣ
+    // ΑΙΣΘΗΤΗΡΕΣ & LOCATION
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var sensorManager: SensorManager
     private lateinit var locationManager: LocationManager
     private var accelerometer: Sensor? = null
-    private var magnetometer: Sensor? = null              // Μαγνητόμετρο για πυξίδα
+    private var magnetometer: Sensor? = null
 
     // ΔΕΔΟΜΕΝΑ ΣΥΛΛΟΓΗΣ
     private var isCollecting = false
@@ -131,18 +79,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var accelX = 0f
     private var accelY = 0f
     private var accelZ = 0f
-    private var magnetX = 0f                   // Μαγνητόμετρο
+    private var magnetX = 0f
     private var magnetY = 0f
     private var magnetZ = 0f
-    private var compassHeading = 0f            // Πυξίδα σε μοίρες (0° = Βορράς)
+    private var compassHeading = 0f
     private var currentLat = 0.0
     private var currentLon = 0.0
-    private var currentSpeed = 0f              // Ταχύτητα από GPS σε km/h
+    private var currentSpeed = 0f
     private var currentAltitude = 0.0
-    private var currentBearing = 0f            // Κατεύθυνση κίνησης
-    private var speedAccuracy = 0f             // Ακρίβεια ταχύτητας
-    private var hasGPSFix = false              // Κατάσταση GPS
-    private var gpsUpdateCount = 0             // Μετρητής GPS updates
+    private var currentBearing = 0f
+    private var speedAccuracy = 0f
+    private var hasGPSFix = false
+    private var gpsUpdateCount = 0
 
     // ΠΥΞΙΔΑ - Matrices για υπολογισμό προσανατολισμού
     private val rotationMatrix = FloatArray(9)
@@ -152,31 +100,36 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var hasAccelerometerData = false
     private var hasMagnetometerData = false
 
-    // ML MODEL & API
+    // ML MODEL & TRIP STATISTICS
     private lateinit var fuelPredictor: FuelPredictor
-    private lateinit var apiClient: ApiClient
-
-    // TRIP STATISTICS
     private var totalDistance = 0.0
     private var averageConsumption = 0.0
     private var previousLocation: Location? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+
+        // Explicit cast για να λύσουμε το ambiguity
+        setContentView(R.layout.activity_main as Int)
 
         initViews()
         initComponents()
         requestPermissions()
+
+        // Φόρτωση τελευταίων δεδομένων από API
+        loadLatestDataFromAPI()
     }
 
     private fun initViews() {
+        progressBar = findViewById(R.id.progressBar)
         tvStatus = findViewById(R.id.tvStatus)
         tvDataCount = findViewById(R.id.tvDataCount)
         tvSpeed = findViewById(R.id.tvSpeed)
         tvLocation = findViewById(R.id.tvLocation)
         tvFuelPrediction = findViewById(R.id.tvFuelPrediction)
         tvTripConsumption = findViewById(R.id.tvTripConsumption)
+        tvAcceleration = findViewById(R.id.tvAcceleration)
+        tvCompass = findViewById(R.id.tvCompass)
         btnStartStop = findViewById(R.id.btnStartStop)
 
         btnStartStop.setOnClickListener {
@@ -189,11 +142,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     }
 
     private fun initComponents() {
+        // Location Services
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
         // Αισθητήρες
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)  // Μαγνητόμετρο για πυξίδα
+        magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
 
         // Έλεγχος διαθεσιμότητας αισθητήρων
         if (accelerometer == null) {
@@ -203,13 +159,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             tvStatus.text = "❌ Δεν υπάρχει μαγνητόμετρο για πυξίδα!"
         }
 
-        // ML Model - εκπαίδευση με το CSV
+        // ML Model - εκπαίδευση με το CSV στο background
         fuelPredictor = FuelPredictor(this)
-
-        // API Client για αποστολή δεδομένων
-        apiClient = ApiClient()
-
-        // Εκπαίδευση μοντέλου στο background
         CoroutineScope(Dispatchers.IO).launch {
             val success = fuelPredictor.trainFromCSV()
             withContext(Dispatchers.Main) {
@@ -234,13 +185,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
 
         // Έλεγχος διαθεσιμότητας αισθητήρων
-        if (accelerometer == null) {
-            tvStatus.text = "❌ Δεν υπάρχει επιταχυνσιόμετρο!"
-            return
-        }
-
-        if (magnetometer == null) {
-            tvStatus.text = "❌ Δεν υπάρχει μαγνητόμετρο για πυξίδα!"
+        if (accelerometer == null || magnetometer == null) {
+            tvStatus.text = "❌ Απαραίτητοι αισθητήρες δεν είναι διαθέσιμοι!"
             return
         }
 
@@ -261,64 +207,56 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
 
-        // Έναρξη GPS με βελτιωμένες ρυθμίσεις
+        // Έναρξη GPS
+        startLocationUpdates()
+        startDataCollection()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
         try {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-
-                // GPS Provider με υψηλή ακρίβεια για ταχύτητα
-                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                        LocationManager.GPS_PROVIDER,
-                        500,   // Κάθε 500ms για καλύτερη ταχύτητα
-                        0.5f,  // Κάθε 0.5 μέτρο για ακρίβεια
-                        this
-                    )
-                }
-
-                // Network provider ως backup
-                if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        2000,  // Λιγότερο συχνά για το network
-                        5f,    // Μεγαλύτερη απόσταση
-                        this
-                    )
-                }
-
-                // Reset GPS counters
-                gpsUpdateCount = 0
-                hasGPSFix = false
-
+            // GPS Provider με υψηλή ακρίβεια
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    500,   // Κάθε 500ms
+                    0.5f,  // Κάθε 0.5 μέτρο
+                    this
+                )
             }
+
+            // Network provider ως backup
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    2000,  // Λιγότερο συχνά
+                    5f,    // Μεγαλύτερη απόσταση
+                    this
+                )
+            }
+
+            // Reset GPS counters
+            gpsUpdateCount = 0
+            hasGPSFix = false
+
         } catch (e: SecurityException) {
             tvStatus.text = "❌ Σφάλμα GPS: ${e.message}"
         }
-
-        startDataCollection()
     }
 
     private fun stopTrip() {
         isCollecting = false
 
         btnStartStop.text = "▶️ ΕΝΑΡΞΗ ΔΙΑΔΡΟΜΗΣ"
-        tvStatus.text = "📊 Ανάλυση διαδρομής..."
+        tvStatus.text = "📊 Ανάλυση διαδρομής και αποστολή δεδομένων..."
 
         // Σταμάτημα αισθητήρων
         sensorManager.unregisterListener(this)
         locationManager.removeUpdates(this)
 
-        // Αποστολή δεδομένων στη βάση
+        // Υπολογισμός τελικής κατανάλωσης και αποστολή στο API
         if (tripData.isNotEmpty()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val success = apiClient.sendTripData(tripData, totalDistance, averageConsumption)
-                withContext(Dispatchers.Main) {
-                    if (success) {
-                        tvStatus.text = "✅ Διαδρομή ολοκληρώθηκε και στάλθηκε!"
-                    } else {
-                        tvStatus.text = "⚠️ Διαδρομή ολοκληρώθηκε - πρόβλημα αποστολής"
-                    }
-                }
-            }
+            calculateTripConsumptionAndSend()
         }
     }
 
@@ -341,16 +279,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             accelerometerX = accelX,
             accelerometerY = accelY,
             accelerometerZ = accelZ,
-            magnetometerX = magnetX,             // Μαγνητόμετρο
+            magnetometerX = magnetX,
             magnetometerY = magnetY,
             magnetometerZ = magnetZ,
-            compassHeading = compassHeading,     // Πυξίδα σε μοίρες
+            compassHeading = compassHeading,
             latitude = currentLat,
             longitude = currentLon,
-            speed = currentSpeed,                // GPS ταχύτητα
+            speed = currentSpeed,
             altitude = currentAltitude,
-            speedAccuracy = speedAccuracy,       // Ακρίβεια ταχύτητας
-            bearing = currentBearing             // Κατεύθυνση
+            speedAccuracy = speedAccuracy,
+            bearing = currentBearing
         )
 
         tripData.add(dataPoint)
@@ -364,7 +302,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
 
         runOnUiThread {
-            // Ενημέρωση πρόβλεψης με χρωματισμό βάσει ταχύτητας και κατανάλωσης
+            // Ενημέρωση πρόβλεψης
             val speedStatus = when {
                 !hasGPSFix -> "❌ ΧΩΡ2Σ GPS"
                 currentSpeed < 1f -> "🛑 ΣΤΑΣΗ"
@@ -378,11 +316,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
             // Χρωματισμός βάσει κατανάλωσης
             val color = when {
-                !hasGPSFix -> 0xFF757575.toInt()           // Γκρι - χωρίς GPS
-                instantConsumption < 6f -> 0xFF4CAF50.toInt() // Πράσινο - οικονομικό
-                instantConsumption < 9f -> 0xFFFF9800.toInt() // Πορτοκαλί - μέτριο
-                instantConsumption < 12f -> 0xFFFF5722.toInt() // Κόκκινο - υψηλό
-                else -> 0xFF9C27B0.toInt()                    // Μωβ - πολύ υψηλό
+                !hasGPSFix -> 0xFF757575.toInt()
+                instantConsumption < 6f -> 0xFF4CAF50.toInt()
+                instantConsumption < 9f -> 0xFFFF9800.toInt()
+                instantConsumption < 12f -> 0xFFFF5722.toInt()
+                else -> 0xFF9C27B0.toInt()
             }
             tvFuelPrediction.setTextColor(color)
         }
@@ -407,10 +345,121 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
+    private fun calculateTripConsumptionAndSend() {
+        if (tripData.isEmpty()) {
+            tvStatus.text = "❌ Δεν υπάρχουν δεδομένα διαδρομής!"
+            return
+        }
+
+        showLoading()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Υπολογισμός τελικής κατανάλωσης με βάση όλη τη διαδρομή
+                val tripConsumptions = tripData.map { fuelPredictor.predictConsumption(it) }
+                val finalAverageConsumption = tripConsumptions.average()
+                val totalFuelUsed = (totalDistance / 100.0) * finalAverageConsumption
+
+                // Δημιουργία δεδομένων για αποστολή στο API
+                val tripSummary = TripSummaryData(
+                    nickname = "FuelPredictApp",
+                    totalDistance = totalDistance,
+                    averageSpeed = if (tripData.isNotEmpty()) tripData.map { it.speed }.average() else 0.0,
+                    maxSpeed = tripData.maxOfOrNull { it.speed }?.toDouble() ?: 0.0,
+                    averageConsumption = finalAverageConsumption,
+                    totalFuelUsed = totalFuelUsed,
+                    duration = (tripData.lastOrNull()?.timestamp ?: 0L) - (tripData.firstOrNull()?.timestamp ?: 0L),
+                    startLat = tripData.firstOrNull()?.latitude ?: 0.0,
+                    startLon = tripData.firstOrNull()?.longitude ?: 0.0,
+                    endLat = tripData.lastOrNull()?.latitude ?: 0.0,
+                    endLon = tripData.lastOrNull()?.longitude ?: 0.0,
+                    dataPoints = tripData.size,
+                    timestamp = System.currentTimeMillis()
+                )
+
+                // Αποστολή στο API
+                sendTripDataToAPI(tripSummary)
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    hideLoading()
+                    tvStatus.text = "❌ Σφάλμα υπολογισμού: ${e.message}"
+                    Log.e("MainActivity", "Calculation error", e)
+                }
+            }
+        }
+    }
+
+    private suspend fun sendTripDataToAPI(tripSummary: TripSummaryData) {
+        try {
+            val response = RetrofitClient.api.sendTripData(tripSummary)
+
+            withContext(Dispatchers.Main) {
+                hideLoading()
+                if (response.isSuccessful) {
+                    tvStatus.text = """
+                        ✅ Διαδρομή ολοκληρώθηκε!
+                        
+                        📊 Τελικά Αποτελέσματα:
+                        📍 Απόσταση: ${String.format("%.1f", tripSummary.totalDistance)} km
+                        ⛽ Μέση κατανάλωση: ${String.format("%.1f", tripSummary.averageConsumption)} L/100km
+                        🔋 Συνολική χρήση: ${String.format("%.2f", tripSummary.totalFuelUsed)} L
+                        🏃 Μέση ταχύτητα: ${String.format("%.1f", tripSummary.averageSpeed)} km/h
+                        
+                        📤 Δεδομένα στάλθηκαν επιτυχώς!
+                    """.trimIndent()
+                } else {
+                    tvStatus.text = "⚠️ Διαδρομή ολοκληρώθηκε - πρόβλημα αποστολής: ${response.code()}"
+                    Log.e("MainActivity", "API Error: ${response.code()} - ${response.message()}")
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                hideLoading()
+                tvStatus.text = "❌ Σφάλμα αποστολής: ${e.message}"
+                Log.e("MainActivity", "API call failed", e)
+            }
+        }
+    }
+
+    // Φόρτωση τελευταίων δεδομένων από API (όπως στην άλλη εφαρμογή)
+    private fun loadLatestDataFromAPI() {
+        showLoading()
+
+        RetrofitClient.api.getAverageFuelConsumption().enqueue(object : Callback<FuelConsumptionResponse> {
+            @SuppressLint("SetTextI18n")
+            override fun onResponse(call: Call<FuelConsumptionResponse>, response: Response<FuelConsumptionResponse>) {
+                hideLoading()
+                if (response.isSuccessful) {
+                    val fuelData = response.body()?.api_response?.data?.firstOrNull()
+                    fuelData?.let {
+                        // Εμφάνιση τελευταίων δεδομένων
+                        tvStatus.text = """
+                            📊 Τελευταία δεδομένα από βάση:
+                            🏃 Ταχύτητα: ${it.speed} km/h
+                            ⛽ Καύσιμα: ${it.fuel_lt} L
+                            📍 Θέση: ${it.lat}, ${it.lon}
+                            ⏰ Χρόνος: ${it.time}
+                        """.trimIndent()
+                    }
+                } else {
+                    tvStatus.text = "⚠️ Πρόβλημα φόρτωσης δεδομένων: ${response.code()}"
+                    Log.e("MainActivity", "API Error: ${response.code()}")
+                }
+            }
+
+            override fun onFailure(call: Call<FuelConsumptionResponse>, t: Throwable) {
+                hideLoading()
+                tvStatus.text = "❌ Σφάλμα σύνδεσης: ${t.message}"
+                Log.e("MainActivity", "API Failure", t)
+            }
+        })
+    }
+
     private fun updateUI() {
         tvDataCount.text = "📊 Σημεία δεδομένων: ${tripData.size}"
 
-        // Βελτιωμένη εμφάνιση ταχύτητας με στάτους
+        // Εμφάνιση ταχύτητας
         val speedText = when {
             !hasGPSFix -> "🏃 Ταχύτητα: ❌ ΧΩΡΙΣ GPS"
             currentSpeed < 0.5f -> "🏃 Ταχύτητα: 🛑 ΣΤΑΣΗ (${String.format("%.1f", currentSpeed)} km/h)"
@@ -419,58 +468,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
         tvSpeed.text = speedText
 
-        // Χρωματισμός ταχύτητας
-        val speedColor = when {
-            !hasGPSFix -> 0xFFFF5722.toInt()      // Κόκκινο - χωρίς GPS
-            currentSpeed < 1f -> 0xFF757575.toInt()  // Γκρι - στάση
-            currentSpeed < 50f -> 0xFF4CAF50.toInt() // Πράσινο - κανονική
-            currentSpeed < 90f -> 0xFFFF9800.toInt() // Πορτοκαλί - γρήγορη
-            else -> 0xFFFF5722.toInt()               // Κόκκινο - πολύ γρήγορη
-        }
-        tvSpeed.setTextColor(speedColor)
-
         // Εμφάνιση θέσης με πυξίδα
         val compassDirection = getCompassDirection(compassHeading)
         tvLocation.text = "📍 ${String.format("%.6f", currentLat)}, ${String.format("%.6f", currentLon)}\n🧭 $compassDirection"
-    }
 
-    /**
-     * Μετατροπή μοιρών σε κατεύθυνση πυξίδας
-     */
-    private fun getCompassDirection(degrees: Float): String {
-        val normalizedDegrees = ((degrees % 360 + 360) % 360) // Κανονικοποίηση 0-360°
+        // Εμφάνιση επιταχυνσιόμετρου
+        tvAcceleration.text = "📈 Επιταχυνσιόμετρο: ${String.format("%.2f, %.2f, %.2f", accelX, accelY, accelZ)}"
 
-        return when {
-            normalizedDegrees < 11.25f || normalizedDegrees >= 348.75f -> "Β ${String.format("%.0f", normalizedDegrees)}°"      // Βορράς
-            normalizedDegrees < 33.75f -> "ΒΒΑ ${String.format("%.0f", normalizedDegrees)}°"   // Βορρά-Βορειοανατολικά
-            normalizedDegrees < 56.25f -> "ΒΑ ${String.format("%.0f", normalizedDegrees)}°"    // Βορειοανατολικά
-            normalizedDegrees < 78.75f -> "ΑΒΑ ${String.format("%.0f", normalizedDegrees)}°"   // Ανατολικά-Βορειοανατολικά
-            normalizedDegrees < 101.25f -> "Α ${String.format("%.0f", normalizedDegrees)}°"     // Ανατολικά
-            normalizedDegrees < 123.75f -> "ΑΝΑ ${String.format("%.0f", normalizedDegrees)}°"  // Ανατολικά-Νοτιοανατολικά
-            normalizedDegrees < 146.25f -> "ΝΑ ${String.format("%.0f", normalizedDegrees)}°"   // Νοτιοανατολικά
-            normalizedDegrees < 168.75f -> "ΝΝΑ ${String.format("%.0f", normalizedDegrees)}°"  // Νότια-Νοτιοανατολικά
-            normalizedDegrees < 191.25f -> "Ν ${String.format("%.0f", normalizedDegrees)}°"     // Νότια
-            normalizedDegrees < 213.75f -> "ΝΝΔ ${String.format("%.0f", normalizedDegrees)}°"  // Νότια-Νοτιοδυτικά
-            normalizedDegrees < 236.25f -> "ΝΔ ${String.format("%.0f", normalizedDegrees)}°"   // Νοτιοδυτικά
-            normalizedDegrees < 258.75f -> "ΔΝΔ ${String.format("%.0f", normalizedDegrees)}°"  // Δυτικά-Νοτιοδυτικά
-            normalizedDegrees < 281.25f -> "Δ ${String.format("%.0f", normalizedDegrees)}°"     // Δυτικά
-            normalizedDegrees < 303.75f -> "ΔΒΔ ${String.format("%.0f", normalizedDegrees)}°"  // Δυτικά-Βορειοδυτικά
-            normalizedDegrees < 326.25f -> "ΒΔ ${String.format("%.0f", normalizedDegrees)}°"   // Βορειοδυτικά
-            else -> "ΒΒΔ ${String.format("%.0f", normalizedDegrees)}°"                          // Βορρά-Βορειοδυτικά
-        }
-    }
-
-    private fun updateGPSStatus() {
-        val gpsStatus = when {
-            !hasGPSFix -> "❌ ΧΩΡΙΣ GPS ΣΗΜΑ"
-            gpsUpdateCount < 3 -> "🟡 GPS ΑΝΑΖΗΤΗΣΗ... (${gpsUpdateCount}/3)"
-            currentSpeed < 0.5f -> "🟢 GPS ΕΝΕΡΓΟ - ΣΤΑΘΜΕΥΜΕΝΟ"
-            else -> "🟢 GPS ΕΝΕΡΓΟ - ΣΕ ΚΙΝΗΣΗ"
-        }
-
-        if (isCollecting) {
-            tvStatus.text = "🚗 Διαδρομή σε εξέλιξη | $gpsStatus"
-        }
+        // Εμφάνιση μαγνητόμετρου
+        tvCompass.text = "🧭 Πυξίδα: ${String.format("%.1f", compassHeading)}°"
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -485,7 +491,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                     System.arraycopy(it.values, 0, accelerometerReading, 0, accelerometerReading.size)
                     hasAccelerometerData = true
 
-                    updateCompassHeading()
+                    // Υπολογισμός πυξίδας μόνο αν έχουμε και τα δύο δεδομένα
+                    if (hasMagnetometerData) {
+                        updateCompassHeading()
+                    }
                 }
                 Sensor.TYPE_MAGNETIC_FIELD -> {
                     magnetX = it.values[0]
@@ -496,7 +505,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                     System.arraycopy(it.values, 0, magnetometerReading, 0, magnetometerReading.size)
                     hasMagnetometerData = true
 
-                    updateCompassHeading()
+                    // Υπολογισμός πυξίδας μόνο αν έχουμε και τα δύο δεδομένα
+                    if (hasAccelerometerData) {
+                        updateCompassHeading()
+                    }
                 }
             }
         }
@@ -506,7 +518,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
      * Υπολογισμός προσανατολισμού πυξίδας (0° = Βορράς)
      */
     private fun updateCompassHeading() {
-        if (hasAccelerometerData && hasMagnetometerData) {
+        try {
             // Υπολογισμός rotation matrix από επιταχυνσιόμετρο και μαγνητόμετρο
             val success = SensorManager.getRotationMatrix(
                 rotationMatrix, null,
@@ -517,19 +529,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                 // Υπολογισμός προσανατολισμού
                 SensorManager.getOrientation(rotationMatrix, orientationAngles)
 
-                // Μετατροπή από radians σε degrees και κανονικοποίηση
+                // Μετατροπή από radians σε degrees
                 var azimuthInDegrees = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
 
                 // Κανονικοποίηση σε 0-360° (0° = Βορράς)
-                compassHeading = if (azimuthInDegrees < 0) {
-                    azimuthInDegrees + 360f
-                } else {
-                    azimuthInDegrees
+                azimuthInDegrees = when {
+                    azimuthInDegrees < 0 -> azimuthInDegrees + 360f
+                    azimuthInDegrees >= 360f -> azimuthInDegrees - 360f
+                    else -> azimuthInDegrees
                 }
 
-                // Εξομάλυνση για σταθερότητα (απλό φίλτρο)
-                compassHeading = smoothCompassReading(compassHeading)
+                // Εξομάλυνση για σταθερότητα
+                compassHeading = smoothCompassReading(azimuthInDegrees)
             }
+        } catch (e: Exception) {
+            // Χειρισμός σφάλματος στον υπολογισμό πυξίδας
+            Log.e("MainActivity", "Compass calculation error", e)
         }
     }
 
@@ -539,7 +554,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var previousCompassHeading = -1f  // -1 σημαίνει μη αρχικοποιημένο
 
     private fun smoothCompassReading(newReading: Float): Float {
-        val alpha = 0.3f // Παράγοντας εξομάλυνσης (0.0 = πλήρης εξομάλυνση, 1.0 = χωρίς εξομάλυνση)
+        val alpha = 0.3f // Παράγοντας εξομάλυνσης
 
         return if (previousCompassHeading < 0f) {
             // Πρώτη ανάγνωση
@@ -562,6 +577,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onLocationChanged(location: Location) {
         gpsUpdateCount++
         hasGPSFix = true
@@ -613,25 +629,67 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         when (sensor?.type) {
             Sensor.TYPE_MAGNETIC_FIELD -> {
                 // Ενημέρωση για την ακρίβεια του μαγνητόμετρου
-                val accuracyText = when (accuracy) {
-                    SensorManager.SENSOR_STATUS_ACCURACY_HIGH -> "Υψηλή"
-                    SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM -> "Μέτρια"
-                    SensorManager.SENSOR_STATUS_ACCURACY_LOW -> "Χαμηλή"
-                    else -> "Αναξιόπιστη"
-                }
-                if (isCollecting) {
+                if (isCollecting && (accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE ||
+                            accuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW)) {
                     runOnUiThread {
-                        // Εμφάνιση προειδοποίησης αν η ακρίβεια είναι χαμηλή
-                        if (accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE ||
-                            accuracy == SensorManager.SENSOR_STATUS_ACCURACY_LOW) {
-                            tvStatus.text = "⚠️ Χαμηλή ακρίβεια πυξίδας - απομακρυνθείτε από μεταλλικά αντικείμενα"
-                        }
+                        tvStatus.text = "⚠️ Χαμηλή ακρίβεια πυξίδας - απομακρυνθείτε από μεταλλικά αντικείμενα"
                     }
                 }
             }
         }
     }
 
+    /**
+     * Μετατροπή μοιρών σε κατεύθυνση πυξίδας
+     */
+    private fun getCompassDirection(degrees: Float): String {
+        val normalizedDegrees = ((degrees % 360 + 360) % 360) // Κανονικοποίηση 0-360°
+
+        return when {
+            normalizedDegrees < 11.25f || normalizedDegrees >= 348.75f -> "Β ${String.format("%.0f", normalizedDegrees)}°"      // Βορράς
+            normalizedDegrees < 33.75f -> "ΒΒΑ ${String.format("%.0f", normalizedDegrees)}°"   // Βορρά-Βορειοανατολικά
+            normalizedDegrees < 56.25f -> "ΒΑ ${String.format("%.0f", normalizedDegrees)}°"    // Βορειοανατολικά
+            normalizedDegrees < 78.75f -> "ΑΒΑ ${String.format("%.0f", normalizedDegrees)}°"   // Ανατολικά-Βορειοανατολικά
+            normalizedDegrees < 101.25f -> "Α ${String.format("%.0f", normalizedDegrees)}°"     // Ανατολικά
+            normalizedDegrees < 123.75f -> "ΑΝΑ ${String.format("%.0f", normalizedDegrees)}°"  // Ανατολικά-Νοτιοανατολικά
+            normalizedDegrees < 146.25f -> "ΝΑ ${String.format("%.0f", normalizedDegrees)}°"   // Νοτιοανατολικά
+            normalizedDegrees < 168.75f -> "ΝΝΑ ${String.format("%.0f", normalizedDegrees)}°"  // Νότια-Νοτιοανατολικά
+            normalizedDegrees < 191.25f -> "Ν ${String.format("%.0f", normalizedDegrees)}°"     // Νότια
+            normalizedDegrees < 213.75f -> "ΝΝΔ ${String.format("%.0f", normalizedDegrees)}°"  // Νότια-Νοτιοδυτικά
+            normalizedDegrees < 236.25f -> "ΝΔ ${String.format("%.0f", normalizedDegrees)}°"   // Νοτιοδυτικά
+            normalizedDegrees < 258.75f -> "ΔΝΔ ${String.format("%.0f", normalizedDegrees)}°"  // Δυτικά-Νοτιοδυτικά
+            normalizedDegrees < 281.25f -> "Δ ${String.format("%.0f", normalizedDegrees)}°"     // Δυτικά
+            normalizedDegrees < 303.75f -> "ΔΒΔ ${String.format("%.0f", normalizedDegrees)}°"  // Δυτικά-Βορειοδυτικά
+            normalizedDegrees < 326.25f -> "ΒΔ ${String.format("%.0f", normalizedDegrees)}°"   // Βορειοδυτικά
+            else -> "ΒΒΔ ${String.format("%.0f", normalizedDegrees)}°"                          // Βορρά-Βορειοδυτικά
+        }
+    }
+
+    private fun updateGPSStatus() {
+        val gpsStatus = when {
+            !hasGPSFix -> "❌ ΧΩΡΙΣ GPS ΣΗΜΑ"
+            gpsUpdateCount < 3 -> "🟡 GPS ΑΝΑΖΗΤΗΣΗ... (${gpsUpdateCount}/3)"
+            currentSpeed < 0.5f -> "🟢 GPS ΕΝΕΡΓΟ - ΣΤΑΘΜΕΥΜΕΝΟ"
+            else -> "🟢 GPS ΕΝΕΡΓΟ - ΣΕ ΚΙΝΗΣΗ"
+        }
+
+        if (isCollecting) {
+            tvStatus.text = "🚗 Διαδρομή σε εξέλιξη | $gpsStatus"
+        }
+    }
+
+    // UI Helper Methods
+    private fun showLoading() {
+        progressBar.visibility = View.VISIBLE
+        btnStartStop.isEnabled = false
+    }
+
+    private fun hideLoading() {
+        progressBar.visibility = View.GONE
+        btnStartStop.isEnabled = true
+    }
+
+    // Permissions
     private fun requestPermissions() {
         val permissions = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -654,10 +712,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         return fineLocation && coarseLocation
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                loadLatestDataFromAPI()
+            } else {
+                tvStatus.text = "❌ Απαιτούνται άδειες GPS για τη λειτουργία της εφαρμογής!"
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (isCollecting) {
-            stopTrip()
+            sensorManager.unregisterListener(this)
+            locationManager.removeUpdates(this)
         }
     }
 }

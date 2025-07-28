@@ -2,7 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:padding="16dp"
+    android:background="#F5F5F5">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -13,307 +14,155 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📱 ΣΥΛΛΟΓΗ ΔΕΔΟΜΕΝΩΝ ΑΙΣΘΗΤΗΡΩΝ"
-            android:textSize="18sp"
+            android:text="⛽ ΠΡΟΒΛΕΨΗ ΚΑΤΑΝΑΛΩΣΗΣ ΚΑΥΣΙΜΟΥ"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:gravity="center"
-            android:padding="16dp"
-            android:background="#E3F2FD"
-            android:layout_marginBottom="16dp" />
+            android:padding="20dp"
+            android:background="@drawable/card_background"
+            android:textColor="#1976D2"
+            android:layout_marginBottom="20dp" />
 
-        <!-- ΚΑΤΑΣΤΑΣΗ -->
+        <!-- ΚΑΤΑΣΤΑΣΗ ΕΦΑΡΜΟΓΗΣ -->
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🔴 Αναμονή..."
+            android:text="🔄 Εκπαίδευση μοντέλου..."
             android:textSize="16sp"
             android:textStyle="bold"
-            android:padding="8dp"
-            android:background="#FFECEC"
-            android:layout_marginBottom="16dp" />
+            android:padding="16dp"
+            android:background="@drawable/status_card"
+            android:textColor="#333333"
+            android:layout_marginBottom="20dp" />
 
-        <!-- ΚΟΥΜΠΙ ΣΥΛΛΟΓΗΣ -->
+        <!-- ΚΟΥΜΠΙ ΔΙΑΔΡΟΜΗΣ -->
         <Button
             android:id="@+id/btnStartStop"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="▶️ ΕΝΑΡΞΗ ΣΥΛΛΟΓΗΣ"
-            android:textSize="16sp"
+            android:layout_height="70dp"
+            android:text="▶️ ΕΝΑΡΞΗ ΔΙΑΔΡΟΜΗΣ"
+            android:textSize="18sp"
             android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/start_button"
             android:layout_marginBottom="24dp" />
 
-        <!-- ΜΕΤΡΗΤΕΣ -->
+        <!-- ΠΡΟΒΛΕΨΗ ΚΑΤΑΝΑΛΩΣΗΣ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="#F5F5F5"
+            android:background="@drawable/prediction_card"
+            android:padding="20dp"
+            android:layout_marginBottom="20dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🔮 REAL-TIME ΠΡΟΒΛΕΨΗ"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="#2E7D32"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/tvFuelPrediction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⛽ Τρέχουσα κατανάλωση: -- L/100km"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#1976D2"
+                android:gravity="center"
+                android:padding="12dp"
+                android:background="#FFFFFF"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/tvTripConsumption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📍 Απόσταση: -- km\n⛽ Μέση κατανάλωση: -- L/100km\n🔋 Εκτιμώμενη χρήση: -- L"
+                android:textSize="14sp"
+                android:textColor="#555555"
+                android:background="#F9F9F9"
+                android:padding="12dp" />
+
+        </LinearLayout>
+
+        <!-- ΔΕΔΟΜΕΝΑ ΔΙΑΔΡΟΜΗΣ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/data_card"
             android:padding="16dp"
             android:layout_marginBottom="16dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📊 ΜΕΤΡΗΤΕΣ"
+                android:text="📊 ΔΕΔΟΜΕΝΑ ΔΙΑΔΡΟΜΗΣ"
                 android:textStyle="bold"
+                android:textSize="14sp"
+                android:textColor="#FF6F00"
                 android:layout_marginBottom="8dp" />
 
             <TextView
                 android:id="@+id/tvDataCount"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📦 Δεδομένα: 0"
+                android:text="📊 Σημεία δεδομένων: 0"
                 android:textSize="14sp"
+                android:textColor="#666666"
                 android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvTime"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="⏱️ Χρόνος: 00:00"
-                android:textSize="14sp" />
-
-        </LinearLayout>
-
-        <!-- GPS ΔΕΔΟΜΕΝΑ -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#E8F5E8"
-            android:padding="16dp"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🛰️ GPS ΔΕΔΟΜΕΝΑ"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
 
             <TextView
                 android:id="@+id/tvSpeed"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="🏃 Ταχύτητα: 0.0 km/h"
-                android:textSize="14sp"
-                android:layout_marginBottom="4dp" />
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#1976D2"
+                android:layout_marginBottom="6dp" />
 
             <TextView
                 android:id="@+id/tvLocation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📍 Θέση: 0.000000, 0.000000"
+                android:text="📍 0.000000, 0.000000\n🧭 Β 0°"
                 android:textSize="12sp"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvAltitude"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🏔️ Υψόμετρο: 0.0 m"
-                android:textSize="12sp" />
+                android:textColor="#999999"
+                android:lineSpacingExtra="2dp" />
 
         </LinearLayout>
 
-        <!-- ΑΙΣΘΗΤΗΡΕΣ -->
+        <!-- ΠΛΗΡΟΦΟΡΙΕΣ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:background="#FFF3E0"
-            android:padding="16dp"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="📱 ΑΙΣΘΗΤΗΡΕΣ"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvAccelerometer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="📈 Επιταχυνσιόμετρο: 0.0, 0.0, 0.0"
-                android:textSize="12sp"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/tvGyroscope"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🌀 Γυροσκόπιο: 0.0, 0.0, 0.0"
-                android:textSize="12sp" />
-
-        </LinearLayout>
-
-        <!-- ΚΟΥΜΠΙΑ ΑΡΧΕΙΩΝ -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#F3E5F5"
+            android:background="@drawable/info_card"
             android:padding="16dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="💾 ΔΙΑΧΕΙΡΙΣΗ ΑΡΧΕΙΩΝ"
+                android:text="ℹ️ ΠΛΗΡΟΦΟΡΙΕΣ"
                 android:textStyle="bold"
-                android:layout_marginBottom="12dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="8dp">
-
-                <Button
-                    android:id="@+id/btnExportCSV"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📤 ΕΞΑΓΩΓΗ CSV"
-                    android:layout_marginEnd="4dp" />
-
-                <Button
-                    android:id="@+id/btnLoadCSV"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📥 ΦΟΡΤΩΣΗ CSV"
-                    android:layout_marginStart="4dp" />
-
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btnClearData"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🗑️ ΚΑΘΑΡΙΣΜΟΣ ΔΕΔΟΜΕΝΩΝ"
+                android:textSize="14sp"
+                android:textColor="#7B1FA2"
                 android:layout_marginBottom="8dp" />
 
             <TextView
-                android:id="@+id/tvFileStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📁 Αρχείο: Δεν υπάρχει"
+                android:text="• Η εφαρμογή εκπαιδεύεται με πραγματικά δεδομένα\n• Οι προβλέψεις βελτιώνονται με την οδήγηση\n• Τα δεδομένα αποστέλλονται αυτόματα στη βάση\n• Για βέλτιστα αποτελέσματα οδηγήστε >5 λεπτά"
                 android:textSize="12sp"
-                android:padding="8dp"
-                android:background="#FFFFFF" />
-
-        </LinearLayout>
-
-        <!-- MACHINE LEARNING -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="#E8F0FE"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🤖 MACHINE LEARNING"
-                android:textStyle="bold"
-                android:layout_marginBottom="12dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="8dp">
-
-                <Button
-                    android:id="@+id/btnTrainModel"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="🎓 ΕΚΠΑΙΔΕΥΣΗ"
-                    android:layout_marginEnd="4dp" />
-
-                <Button
-                    android:id="@+id/btnModelInfo"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📊 ΣΤΑΤΙΣΤΙΚΑ"
-                    android:layout_marginStart="4dp" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="8dp">
-
-                <Button
-                    android:id="@+id/btnLoadRealData"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📚 ΦΟΡΤΩΣΗ DATASET"
-                    android:layout_marginEnd="4dp" />
-
-                <Button
-                    android:id="@+id/btnAnalyzeData"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="🔍 ΑΝΑΛΥΣΗ"
-                    android:layout_marginStart="4dp" />
-
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="8dp">
-
-                <Button
-                    android:id="@+id/btnCalculateConsumption"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="⛽ ΚΑΤΑΝΑΛΩΣΗ"
-                    android:layout_marginEnd="4dp" />
-
-                <Button
-                    android:id="@+id/btnResetModel"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="🔄 RESET"
-                    android:layout_marginStart="4dp" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvCurrentPrediction"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🔮 Πρόβλεψη: -- L/100km"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="#1976D2"
-                android:padding="8dp"
-                android:background="#FFFFFF"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
-                android:id="@+id/tvModelStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="❌ Μοντέλο δεν έχει εκπαιδευτεί"
-                android:textSize="12sp"
-                android:padding="8dp"
-                android:background="#FFEBEE" />
+                android:textColor="#666666"
+                android:lineSpacingExtra="2dp" />
 
         </LinearLayout>
 

@@ -20,6 +20,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -184,7 +185,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             return
         }
 
-        // Έλεγχος διαθεσιμότητας αισθητήρων
         if (accelerometer == null || magnetometer == null) {
             tvStatus.text = "❌ Απαραίτητοι αισθητήρες δεν είναι διαθέσιμοι!"
             return
@@ -296,6 +296,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         // Πρόβλεψη κατανάλωσης για αυτό το σημείο
         val instantConsumption = fuelPredictor.predictConsumption(dataPoint)
 
+        // ΜΟΝΟ ΑΥΤΗ Η ΓΡΑΜΜΗ - στέλνει τα δεδομένα στο Flask
+        SimpleRealtimeSender.sendNow(dataPoint, instantConsumption)
+
         // Ενημέρωση συνολικής κατανάλωσης διαδρομής
         if (tripData.size > 1) {
             updateTripStatistics()
@@ -392,31 +395,65 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     private suspend fun sendTripDataToAPI(tripSummary: TripSummaryData) {
         try {
-            val response = RetrofitClient.api.sendTripData(tripSummary)
-
             withContext(Dispatchers.Main) {
-                hideLoading()
-                if (response.isSuccessful) {
-                    tvStatus.text = """
-                        ✅ Διαδρομή ολοκληρώθηκε!
+                showLoading()
+            }
+
+            // LOG τα δεδομένα πριν τα στείλεις
+            Log.d("SendData", "=== SENDING TO FLASK API ===")
+            Log.d("SendData", "Vehicle: ${tripSummary.nickname}")
+            Log.d("SendData", "Distance: ${tripSummary.totalDistance} km")
+            Log.d("SendData", "Avg Speed: ${tripSummary.averageSpeed} km/h")
+            Log.d("SendData", "Avg Consumption: ${tripSummary.averageConsumption} L/100km")
+            Log.d("SendData", "Start Location: ${tripSummary.startLat}, ${tripSummary.startLon}")
+            Log.d("SendData", "End Location: ${tripSummary.endLat}, ${tripSummary.endLon}")
+            Log.d("SendData", "Data Points: ${tripSummary.dataPoints}")
+            Log.d("SendData", "Timestamp: ${tripSummary.timestamp}")
+
+            // Στέλνουμε στο Flask API μόνο
+            withContext(Dispatchers.IO) {
+                FlaskOnlyClient.sendTripToFlask(
+                    tripSummary = tripSummary,
+                    onSuccess = { flaskResponse ->
+                        runOnUiThread {
+                            hideLoading()
+                            Log.d("SendData", "✅ SUCCESS - Flask Response: ${flaskResponse.message}")
+
+                            tvStatus.text = """
+                        ✅ Διαδρομή αποθηκεύτηκε επιτυχώς στο Flask!
                         
-                        📊 Τελικά Αποτελέσματα:
-                        📍 Απόσταση: ${String.format("%.1f", tripSummary.totalDistance)} km
-                        ⛽ Μέση κατανάλωση: ${String.format("%.1f", tripSummary.averageConsumption)} L/100km
-                        🔋 Συνολική χρήση: ${String.format("%.2f", tripSummary.totalFuelUsed)} L
+                        📊 Αποθηκευμένα στοιχεία:
+                        🚗 Όχημα: ${tripSummary.nickname}
+                        📍 Απόσταση: ${String.format("%.2f", tripSummary.totalDistance)} km
+                        ⛽ Μέση κατανάλωση: ${String.format("%.2f", tripSummary.averageConsumption)} L/100km
                         🏃 Μέση ταχύτητα: ${String.format("%.1f", tripSummary.averageSpeed)} km/h
-                        
-                        📤 Δεδομένα στάλθηκαν επιτυχώς!
+                        📍 Από: ${String.format("%.6f, %.6f", tripSummary.startLat, tripSummary.startLon)}
+                        📍 Έως: ${String.format("%.6f, %.6f", tripSummary.endLat, tripSummary.endLon)}
+                        📊 Σημεία δεδομένων: ${tripSummary.dataPoints}
+                        📁 Flask Message: ${flaskResponse.message}
                     """.trimIndent()
-                } else {
-                    tvStatus.text = "⚠️ Διαδρομή ολοκληρώθηκε - πρόβλημα αποστολής: ${response.code()}"
-                    Log.e("MainActivity", "API Error: ${response.code()} - ${response.message()}")
-                }
+
+                            // Εμφάνιση Toast για confirmation
+                            Toast.makeText(this@MainActivity, "✅ Δεδομένα στάλθηκαν στο Flask!", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onError = { errorMessage ->
+                        runOnUiThread {
+                            hideLoading()
+                            Log.e("SendData", "❌ FAILED - $errorMessage")
+
+                            tvStatus.text = "❌ Σφάλμα αποστολής στο Flask:\n$errorMessage"
+
+                            // Εμφάνιση Toast για error
+                            Toast.makeText(this@MainActivity, "❌ Αποτυχία αποστολής!", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                )
             }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
                 hideLoading()
-                tvStatus.text = "❌ Σφάλμα αποστολής: ${e.message}"
+                tvStatus.text = "❌ Σφάλμα: ${e.message}"
                 Log.e("MainActivity", "API call failed", e)
             }
         }
@@ -426,32 +463,45 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private fun loadLatestDataFromAPI() {
         showLoading()
 
-        RetrofitClient.api.getAverageFuelConsumption().enqueue(object : Callback<FuelConsumptionResponse> {
+        // Χρησιμοποιούμε το FlaskOnlyClient αντί για το παλιό RetrofitClient
+        FlaskOnlyClient.api.getAverageFuelConsumption().enqueue(object : Callback<FuelConsumptionResponse> {
             @SuppressLint("SetTextI18n")
             override fun onResponse(call: Call<FuelConsumptionResponse>, response: Response<FuelConsumptionResponse>) {
                 hideLoading()
                 if (response.isSuccessful) {
                     val fuelData = response.body()?.api_response?.data?.firstOrNull()
                     fuelData?.let {
-                        // Εμφάνιση τελευταίων δεδομένων
+                        // Εμφάνιση τελευταίων δεδομένων από Flask
                         tvStatus.text = """
-                            📊 Τελευταία δεδομένα από βάση:
-                            🏃 Ταχύτητα: ${it.speed} km/h
-                            ⛽ Καύσιμα: ${it.fuel_lt} L
-                            📍 Θέση: ${it.lat}, ${it.lon}
-                            ⏰ Χρόνος: ${it.time}
-                        """.trimIndent()
+                        📊 Τελευταία δεδομένα από Flask API:
+                        🚗 Όχημα: ${it.nickname}
+                        🏃 Ταχύτητα: ${it.speed} km/h
+                        ⛽ Καύσιμα: ${it.fuel_lt} L
+                        📍 Θέση: ${String.format("%.6f", it.lat)}, ${String.format("%.6f", it.lon)}
+                        🏔️ Υψόμετρο: ${it.alt}m
+                        ⏰ Χρόνος: ${it.time}
+                        
+                        🎯 Εφαρμογή συνδεδεμένη με Flask API μόνο!
+                    """.trimIndent()
+
+                        Log.d("MainActivity", "Flask API connected successfully")
+                        Toast.makeText(this@MainActivity, "✅ Συνδέθηκε με Flask API", Toast.LENGTH_SHORT).show()
+                    } ?: run {
+                        tvStatus.text = "📊 Flask API συνδέθηκε, αλλά δεν υπάρχουν δεδομένα ακόμα"
+                        Toast.makeText(this@MainActivity, "Flask API OK - No data yet", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    tvStatus.text = "⚠️ Πρόβλημα φόρτωσης δεδομένων: ${response.code()}"
-                    Log.e("MainActivity", "API Error: ${response.code()}")
+                    tvStatus.text = "⚠️ Πρόβλημα φόρτωσης από Flask: ${response.code()}"
+                    Log.e("MainActivity", "Flask API Error: ${response.code()}")
+                    Toast.makeText(this@MainActivity, "❌ Flask API Error: ${response.code()}", Toast.LENGTH_SHORT).show()
                 }
             }
 
             override fun onFailure(call: Call<FuelConsumptionResponse>, t: Throwable) {
                 hideLoading()
-                tvStatus.text = "❌ Σφάλμα σύνδεσης: ${t.message}"
-                Log.e("MainActivity", "API Failure", t)
+                tvStatus.text = "❌ Σφάλμα σύνδεσης με Flask: ${t.message}"
+                Log.e("MainActivity", "Flask API Failure", t)
+                Toast.makeText(this@MainActivity, "❌ Δεν μπορεί να συνδεθεί στο Flask", Toast.LENGTH_LONG).show()
             }
         })
     }

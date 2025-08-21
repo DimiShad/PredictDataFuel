@@ -307,11 +307,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         runOnUiThread {
             // Ενημέρωση πρόβλεψης
             val speedStatus = when {
-                !hasGPSFix -> "❌ ΧΩΡ2Σ GPS"
+                !hasGPSFix -> "❌ ΧΩΡΙΣ GPS"
                 currentSpeed < 1f -> "🛑 ΣΤΑΣΗ"
-                currentSpeed < 20f -> "🚶 ΑΡΓΑ"
+                currentSpeed < 15f && instantConsumption > 8f -> "⛰️ ΑΝΗΦΟΡΑ/ΠΡΩΤΗ"
+                currentSpeed < 20f -> "🚶 ΑΣΤΙΚΗ"
                 currentSpeed < 50f -> "🚗 ΚΑΝΟΝΙΚΑ"
                 currentSpeed < 90f -> "🏎️ ΓΡΗΓΟΡΑ"
+                instantConsumption > 8f -> "🔥 EXTREME STRESS"
                 else -> "🚀 ΠΟΛΥ ΓΡΗΓΟΡΑ"
             }
 
@@ -320,9 +322,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             // Χρωματισμός βάσει κατανάλωσης
             val color = when {
                 !hasGPSFix -> 0xFF757575.toInt()
-                instantConsumption < 6f -> 0xFF4CAF50.toInt()
-                instantConsumption < 9f -> 0xFFFF9800.toInt()
-                instantConsumption < 12f -> 0xFFFF5722.toInt()
+                instantConsumption < 4.0f -> 0xFF4CAF50.toInt()
+                instantConsumption < 5.5f -> 0xFF8BC34A.toInt()
+                instantConsumption < 7.0f -> 0xFFFF9800.toInt()
+                instantConsumption < 9.0f -> 0xFFFF5722.toInt()
                 else -> 0xFF9C27B0.toInt()
             }
             tvFuelPrediction.setTextColor(color)

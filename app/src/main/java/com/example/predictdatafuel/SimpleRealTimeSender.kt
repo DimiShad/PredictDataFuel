@@ -9,7 +9,7 @@ import java.io.IOException
 
 object SimpleRealtimeSender {
     private const val TAG = "SimpleRealtimeSender"
-    private const val FLASK_URL = "http://83.212.80.156:5000/api/sendPhoneData"
+    private const val SPRING_URL = "http://83.212.80.156:8080/api/sensor-data"  // ΑΛΛΑΓΗ: sensor-data endpoint
 
     private val client = OkHttpClient()
     private val gson = Gson()
@@ -36,7 +36,7 @@ object SimpleRealtimeSender {
         val body = json.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
-            .url(FLASK_URL)
+            .url(SPRING_URL)  // ΑΛΛΑΓΗ: χρήση SPRING_URL
             .post(body)
             .build()
 
